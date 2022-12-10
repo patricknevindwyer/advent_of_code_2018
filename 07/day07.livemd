@@ -1,0 +1,93 @@
+# Day 07
+
+## Data
+
+```elixir
+data = "#{__DIR__}/part01.dat" |> File.read!()
+```
+
+```elixir
+defmodule DepGraph do
+  def parse(raw) do
+    # dependencies
+    deps =
+      raw
+      |> String.split("\n")
+      |> Enum.map(&parse_dependency/1)
+      |> Enum.group_by(fn %{"step" => s} -> s end, fn %{"dep" => d} -> d end)
+
+    # roots
+    roots =
+      deps
+      |> Map.values()
+      |> List.flatten()
+      |> Enum.uniq()
+      |> Enum.reject(fn k -> Map.has_key?(deps, k) end)
+
+    # our actual root
+    root = roots |> Enum.sort() |> List.first()
+
+    # roots we need to add back in
+    other_roots =
+      roots
+      |> Enum.sort()
+      |> Enum.drop(1)
+      |> Enum.map(fn r -> {r, []} end)
+      |> Map.new()
+
+    %{graph: deps |> Map.merge(other_roots), root: root}
+  end
+
+  def solve(%{root: r, graph: g}) do
+    solve_step(g, [], r)
+  end
+
+  defp solve_step(%{} = g, steps, next_step) do
+    if Enum.empty?(g) do
+      # We're done!
+      steps
+    else
+      # clean up the graph
+      updated_graph =
+        g
+        |> Map.drop([next_step])
+        |> Enum.map(fn {k, deps} ->
+          {
+            k,
+            deps
+            |> MapSet.new()
+            |> MapSet.delete(next_step)
+            |> MapSet.to_list()
+          }
+        end)
+        |> Map.new()
+
+      # find candidates for the next step, and select our next one
+      candidate =
+        updated_graph
+        |> Enum.filter(fn {_k, deps} -> Enum.empty?(deps) end)
+        |> Enum.map(fn {k, _deps} -> k end)
+        |> Enum.sort()
+        |> List.first()
+
+      solve_step(updated_graph, steps ++ [next_step], candidate)
+    end
+  end
+
+  defp parse_dependency(line) do
+    Regex.named_captures(
+      ~r/^Step\s(?<dep>[a-zA-Z]+)\smust\sbe\sfinished\sbefore\sstep\s(?<step>[a-zA-Z]+)\scan\sbegin./x,
+      line
+    )
+  end
+end
+```
+
+## Part 01
+
+```elixir
+data
+|> DepGraph.parse()
+|> DepGraph.solve()
+|> Enum.join("")
+```
